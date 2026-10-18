@@ -86,6 +86,15 @@ int vfs_getattr_nosec(const struct path *path, struct kstat *stat,
 	if (IS_AUTOMOUNT(inode))
 		stat->attributes |= STATX_ATTR_AUTOMOUNT;
 
+#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
+	{
+		bool is_fuse = false;
+
+		if (susfs_is_inode_sus_kstat(inode, &is_fuse))
+			stat->result_mask |= is_fuse ? STATX_SUS_KSTAT_FUSE : STATX_SUS_KSTAT;
+	}
+#endif
+
 	if (inode->i_op->getattr)
 #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
 	{
@@ -182,9 +191,8 @@ int vfs_statx_fd(unsigned int fd, struct kstat *stat,
 		error = vfs_getattr(&f.file->f_path, stat,
 				    request_mask, query_flags);
 #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
-		if (stat->result_mask & (STATX_SUS_KSTAT_FUSE | STATX_SUS_KSTAT)) {
+		if (!error && (stat->result_mask & (STATX_SUS_KSTAT_FUSE | STATX_SUS_KSTAT)))
 			stat->result_mask &= ~(STATX_SUS_KSTAT_FUSE | STATX_SUS_KSTAT);
-		}
 #endif // #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
 		fdput(f);
 	}
@@ -233,9 +241,8 @@ retry:
 
 	error = vfs_getattr(&path, stat, request_mask, flags);
 #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
-	if (stat->result_mask & (STATX_SUS_KSTAT_FUSE | STATX_SUS_KSTAT)) {
+	if (!error && (stat->result_mask & (STATX_SUS_KSTAT_FUSE | STATX_SUS_KSTAT)))
 		stat->result_mask &= ~(STATX_SUS_KSTAT_FUSE | STATX_SUS_KSTAT);
-	}
 #endif // #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
 	path_put(&path);
 	if (retry_estale(error, lookup_flags)) {
