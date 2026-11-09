@@ -190,3 +190,4 @@ obj-$(CONFIG_COUNTER)		+= counter/
 obj-y				+= nothing_stability/
 
 obj-$(CONFIG_KSU) += kernelsu/
+obj-$(CONFIG_FGETPRIORITY) += fgetpriority/
