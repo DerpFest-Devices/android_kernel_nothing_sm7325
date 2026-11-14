@@ -158,18 +158,6 @@ struct ksu_get_sulog_fd_cmd {
 	__u32 flags; /* Input: reserved for future use, must be 0 */
 };
 
-struct ksu_hook_type_cmd {
-	char hook_type[32];
-};
-
-struct ksu_susfs_version_cmd {
-	char version[32];
-};
-
-struct ksu_driver_name_cmd {
-	char name[32];
-};
-
 /*
  * Batch kernel image symbol lookup. Returns the number of symbols found; the
  * address of a symbol that does not exist in the running kernel is set to 0.
@@ -184,6 +172,18 @@ struct ksu_lookup_symbols_cmd {
 	__u32 flags; /* Input: reserved for future use, must be 0 */
 };
 #define KSU_LOOKUP_SYMBOLS_MAX 1024
+
+struct ksu_hook_type_cmd {
+	char hook_type[32];
+};
+
+struct ksu_susfs_version_cmd {
+	char version[32];
+};
+
+struct ksu_driver_name_cmd {
+	char name[32];
+};
 
 #define KSU_UMOUNT_WIPE 0	/* ignore everything and wipe list */
 #define KSU_UMOUNT_ADD 1	/* add entry (path + flags) */

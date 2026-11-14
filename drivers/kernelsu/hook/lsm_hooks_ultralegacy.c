@@ -271,12 +271,12 @@ static inline void set_selinux_ops()
 	
 	struct security_operations *ops = nullptr;
 
-// if user exports selinux_ops, we just go for it!
-#ifdef KSU_HAS_EXPORTED_SELINUX_OPS
-	extern struct security_operations selinux_ops;
-	if (!ops)
+	// if user exports selinux_ops, we just go for it!
+	extern struct security_operations selinux_ops __weak;
+	if (!!&selinux_ops) {
+		pr_info("%s: exported selinux_ops: 0x%lx \n", __func__, (uintptr_t)&selinux_ops);
 		ops = (struct security_operations *)&selinux_ops;
-#endif
+	}
 
 #ifdef CONFIG_KEYS
 	extern struct key_user root_key_user;
@@ -358,7 +358,7 @@ static int ksu_register_lsm_hook(void *data)
 	return 0;
 }
 
-static void ksu_lsm_hook_init(void)
+static void __init ksu_lsm_hook_init(void)
 {
 	set_selinux_ops();
 
@@ -375,9 +375,4 @@ static void ksu_lsm_hook_init(void)
 	
 	kthread_run(ksu_restore_file_permission, NULL, "kthread");
 	return;
-}
-
-static void __init ksu_core_init(void)
-{
-	ksu_lsm_hook_init();
 }

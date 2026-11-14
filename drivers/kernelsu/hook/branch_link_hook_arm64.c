@@ -48,9 +48,9 @@
  */
 
 #if defined(__GNUC__) && !defined(__clang__)
-#define KEEP_SYMBOL __attribute__((used)) noinline __attribute__((optimize("no-optimize-sibling-calls")))
+#define KEEP_SYMBOL_NO_TAIL __attribute__((used)) noinline __attribute__((optimize("no-optimize-sibling-calls")))
 #else
-#define KEEP_SYMBOL __attribute__((used)) noinline __attribute__((disable_tail_calls))
+#define KEEP_SYMBOL_NO_TAIL __attribute__((used)) noinline __attribute__((disable_tail_calls))
 #endif
 
 #pragma GCC diagnostic push
@@ -58,13 +58,13 @@
 #pragma GCC diagnostic ignored "-Winfinite-recursion"
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 7, 0) || defined(KSU_HAS_FACCESSAT2)
-KEEP_SYMBOL long ksu_do_faccessat(int dfd, const char __user *filename, int mode, int flags)
+KEEP_SYMBOL_NO_TAIL long ksu_do_faccessat(int dfd, const char __user *filename, int mode, int flags)
 {
 	ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
 	return ksu_do_faccessat(dfd, filename, mode, flags);
 }
 #else
-KEEP_SYMBOL long ksu_do_faccessat(int dfd, const char __user *filename, int mode)
+KEEP_SYMBOL_NO_TAIL long ksu_do_faccessat(int dfd, const char __user *filename, int mode)
 {
 	ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
 	return ksu_do_faccessat(dfd, filename, mode);
@@ -78,7 +78,7 @@ KEEP_SYMBOL long ksu_do_faccessat(int dfd, const char __user *filename, int mode
  * actually overloading on do_statx is possible instead of this ifdef, see torvalds/linux 1b6fe6e0dfe
  * but we already scan for something like faccessat2 so nbd for now.
  */
-KEEP_SYMBOL int ksu_vfs_statx(int dfd, struct filename *restrict filename, int flags, struct kstat *restrict stat, u32 request_mask)
+KEEP_SYMBOL_NO_TAIL int ksu_vfs_statx(int dfd, struct filename *restrict filename, int flags, struct kstat *restrict stat, u32 request_mask)
 {
 	if (likely(IS_ERR(filename)))
 		goto orig_fn;
@@ -112,14 +112,14 @@ orig_fn:
 	return ksu_vfs_statx(dfd, filename, flags, stat, request_mask);
 }
 #else
-KEEP_SYMBOL int ksu_vfs_statx(int dfd, const char __user *filename, int flags, struct kstat *stat, u32 request_mask)
+KEEP_SYMBOL_NO_TAIL int ksu_vfs_statx(int dfd, const char __user *filename, int flags, struct kstat *stat, u32 request_mask)
 {
 	ksu_handle_stat(&dfd, &filename, &flags);
 	return ksu_vfs_statx(dfd, filename, flags, stat, request_mask);
 }
 #endif // >= 5.18
 
-KEEP_SYMBOL int ksu_vfs_fstatat(int dfd, const char __user *filename, struct kstat *stat, int flags)
+KEEP_SYMBOL_NO_TAIL int ksu_vfs_fstatat(int dfd, const char __user *filename, struct kstat *stat, int flags)
 {
 	ksu_handle_stat(&dfd, &filename, &flags);
 	return ksu_vfs_fstatat(dfd, filename, stat, flags);
@@ -127,14 +127,14 @@ KEEP_SYMBOL int ksu_vfs_fstatat(int dfd, const char __user *filename, struct kst
 
 // execve
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
-KEEP_SYMBOL int ksu_do_execveat_common(int fd, struct filename *filename, struct user_arg_ptr argv, struct user_arg_ptr envp, int flags)
+KEEP_SYMBOL_NO_TAIL int ksu_do_execveat_common(int fd, struct filename *filename, struct user_arg_ptr argv, struct user_arg_ptr envp, int flags)
 {
 	ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
 	return ksu_do_execveat_common(fd, filename, argv, envp, flags);
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
-KEEP_SYMBOL int ksu_do_execve_file(int fd, struct filename *restrict filename, struct user_arg_ptr argv, struct user_arg_ptr envp, int flags, struct file *restrict file)
+KEEP_SYMBOL_NO_TAIL int ksu_do_execve_file(int fd, struct filename *restrict filename, struct user_arg_ptr argv, struct user_arg_ptr envp, int flags, struct file *restrict file)
 {
 	ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
 	return ksu_do_execve_file(fd, filename, argv, envp, flags, file);
@@ -142,7 +142,7 @@ KEEP_SYMBOL int ksu_do_execve_file(int fd, struct filename *restrict filename, s
 #endif // < 5.9
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
-KEEP_SYMBOL int ksu_do_execve_common(struct filename *filename, struct user_arg_ptr argv, struct user_arg_ptr envp)
+KEEP_SYMBOL_NO_TAIL int ksu_do_execve_common(struct filename *filename, struct user_arg_ptr argv, struct user_arg_ptr envp)
 {
 	ksu_handle_execveat((int *)AT_FDCWD, &filename, &argv, &envp, 0);
 	return ksu_do_execve_common(filename, argv, envp);
@@ -151,7 +151,7 @@ KEEP_SYMBOL int ksu_do_execve_common(struct filename *filename, struct user_arg_
 
 #else /* < 3.14 */
 
-KEEP_SYMBOL int ksu_do_execve_common(const char *filename, struct user_arg_ptr argv, struct user_arg_ptr envp)
+KEEP_SYMBOL_NO_TAIL int ksu_do_execve_common(const char *filename, struct user_arg_ptr argv, struct user_arg_ptr envp)
 {
 	ksu_legacy_execve_sucompat(&filename, &argv, &envp);
 	return ksu_do_execve_common(filename, argv, envp);
@@ -159,7 +159,7 @@ KEEP_SYMBOL int ksu_do_execve_common(const char *filename, struct user_arg_ptr a
 #endif
 
 #pragma GCC diagnostic pop
-#undef KEEP_SYMBOL
+#undef KEEP_SYMBOL_NO_TAIL
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)
 #define syscall_lookup(name) kallsyms_lookup_retry("__arm64_" name)
@@ -170,7 +170,10 @@ KEEP_SYMBOL int ksu_do_execve_common(const char *filename, struct user_arg_ptr a
 #ifdef CONFIG_MODULES
 #define kernel_function_lookup(name) kallsyms_lookup_retry(#name)
 #else
-#define kernel_function_lookup(name) (uintptr_t)&name
+#define kernel_function_lookup(name) ({ 						\
+	pr_info("kernel_function_lookup: %s addr: 0x%lx\n", #name, (uintptr_t)&name);	\
+	(uintptr_t)&name; 								\
+})
 #endif
 
 #define ksu_get_ksym_size32(addr)	ksu_get_ksym_size(addr, (32 * sizeof(uint32_t)))
@@ -188,8 +191,6 @@ static int bl_hook_faccessat(void *data)
 	int ret;
 	uintptr_t target_callsite;
 	uintptr_t symbol_addr;
-	unsigned long sym_size = 0; 
-	unsigned long offset = 0;
 
 	target_callsite = syscall_lookup("sys_faccessat");
 	symbol_addr = kallsyms_lookup_retry("do_faccessat");
@@ -209,9 +210,9 @@ static int bl_hook_faccessat(void *data)
 	return ret;
 
 unhook_sct:
-	restore_syscall((void *)&aarch64_faccessat, __AARCH64_faccessat, (void *)hook_aarch64_faccessat, (void *)sys_call_table);
+	restore_syscall((void *)&aarch64_faccessat, __AARCH64_faccessat, (void *)hook_aarch64_faccessat, native_sct);
 #if defined(CONFIG_COMPAT)
-	restore_syscall((void *)&armeabi_faccessat, __ARMEABI_faccessat, (void *)hook_armeabi_faccessat, (void *)compat_sys_call_table);
+	restore_syscall((void *)&armeabi_faccessat, __ARMEABI_faccessat, (void *)hook_armeabi_faccessat, compat_sct);
 #endif
 	return ret;
 }
@@ -221,48 +222,6 @@ static int bl_hook_newfstatat(void *data)
 	int ret;
 	uintptr_t target_callsite;
 	uintptr_t symbol_addr;
-
-// scope too huge. whole stat subsystem.
-#if 0 // LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)
-	target_callsite = kallsyms_lookup_retry("vfs_fstatat");
-	if (!target_callsite)
-		goto skip_single_hook;
-
-	symbol_addr = kallsyms_lookup_retry("vfs_statx");
-	if (!symbol_addr)
-		goto skip_single_hook;
-
-	// patch our hook handler first
-	ret = ksu_self_patch_hook(ksu_vfs_statx, symbol_addr);
-	if (ret)
-		return ret;
-
-	// this is a bit deeper, lets assume 64 insn
-	ret = arm64_b_or_bl_patch(target_callsite, ksu_get_ksym_size(target_callsite, 64 * sizeof(uint32_t)), symbol_addr, (uintptr_t)&ksu_vfs_statx);
-	pr_info("hook_site: vfs_fstatat->vfs_statx ret: %d \n", ret);
-	if (ret)
-		goto single_hook_fail;
-
-	// single hook point so restore both
-	restore_syscall((void *)&aarch64_newfstatat, __AARCH64_newfstatat, (void *)hook_aarch64_newfstatat, (void *)sys_call_table);
-#ifdef CONFIG_COMPAT
-	restore_syscall((void *)&armeabi_fstatat64, __ARMEABI_fstatat64, (void *)hook_armeabi_fstatat64, (void *)compat_sys_call_table);
-#endif
-	return ret;
-
-single_hook_fail:
-	target_callsite = syscall_lookup("sys_newfstatat");
-	symbol_addr = kallsyms_lookup_retry("vfs_statx");
-
-	// if we are here, we patched hook above already
-	ret = arm64_b_or_bl_patch(target_callsite, ksu_get_ksym_size32(target_callsite), symbol_addr, (uintptr_t)&ksu_vfs_statx);
-	pr_info("hook_site: sys_newfstatat->vfs_statx ret: %d \n", ret);
-	if (!ret)
-		goto unhook_sct_native;
-
-	goto hook2;
-skip_single_hook:
-#endif
 
 	target_callsite = syscall_lookup("sys_newfstatat");
 	symbol_addr = kallsyms_lookup_retry("vfs_statx");
@@ -297,7 +256,7 @@ hook2:
 	return ret;
 
 unhook_sct_native:
-	restore_syscall((void *)&aarch64_newfstatat, __AARCH64_newfstatat, (void *)hook_aarch64_newfstatat, (void *)sys_call_table);
+	restore_syscall((void *)&aarch64_newfstatat, __AARCH64_newfstatat, (void *)hook_aarch64_newfstatat, native_sct);
 
 #ifdef CONFIG_COMPAT
 	target_callsite = syscall_lookup("sys_fstatat64");
@@ -323,7 +282,7 @@ hook2c:
 	return ret;
 
 unhook_sct_compat:
-	restore_syscall((void *)&armeabi_fstatat64, __ARMEABI_fstatat64, (void *)hook_armeabi_fstatat64, (void *)compat_sys_call_table);
+	restore_syscall((void *)&armeabi_fstatat64, __ARMEABI_fstatat64, (void *)hook_armeabi_fstatat64, compat_sct);
 #endif // CONFIG_COMPAT
 
 	return ret;
@@ -332,14 +291,14 @@ unhook_sct_compat:
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
 static int bl_hook_execve(void *data)
 {
-	int ret;
+	int ret = -ENOENT;
+	int ret2 = -ENOENT;
+	uintptr_t symbol_addr;
 	uintptr_t target_callsite;
 	uintptr_t target_callsite2;
-	uintptr_t symbol_addr;
 
 	target_callsite = syscall_lookup("sys_execve");
 	target_callsite2 = syscall_lookup("sys_execveat");
-
 	symbol_addr = kallsyms_lookup_retry("do_execveat_common");
 	if (!symbol_addr)
 		goto hook2;
@@ -351,13 +310,14 @@ static int bl_hook_execve(void *data)
 
 	ret = arm64_b_or_bl_patch(target_callsite, ksu_get_ksym_size32(target_callsite), symbol_addr, (uintptr_t)&ksu_do_execveat_common);
 	pr_info("hook_site: sys_execve->do_execveat_common ret: %d \n", ret);
-	if (!ret && !!target_callsite2) {
-		ret = arm64_b_or_bl_patch(target_callsite2, ksu_get_ksym_size32(target_callsite2), symbol_addr, (uintptr_t)&ksu_do_execveat_common);
-		pr_info("hook_site: sys_execveat->do_execveat_common ret: %d \n", ret);
-	}
 	if (!ret)
-		goto unhook_sct_native;
+		restore_syscall((void *)&aarch64_execve, __AARCH64_execve, (void *)hook_aarch64_execve, native_sct);
 
+	ret2 = arm64_b_or_bl_patch(target_callsite2, ksu_get_ksym_size32(target_callsite2), symbol_addr, (uintptr_t)&ksu_do_execveat_common);
+	pr_info("hook_site: sys_execveat->do_execveat_common ret: %d \n", ret2);
+	if (!ret2)
+		restore_syscall((void *)&aarch64_execveat, __AARCH64_execveat, (void *)hook_aarch64_execveat, native_sct);
+	goto compat;
 hook2:
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
 	symbol_addr = kallsyms_lookup_retry("__do_execve_file");
@@ -371,12 +331,14 @@ hook2:
 
 	ret = arm64_b_or_bl_patch(target_callsite, ksu_get_ksym_size32(target_callsite), symbol_addr, (uintptr_t)&ksu_do_execve_file);
 	pr_info("hook_site: sys_execve->__do_execve_file ret: %d \n", ret);
-	if (!ret && !!target_callsite2) {
-		ret = arm64_b_or_bl_patch(target_callsite2, ksu_get_ksym_size32(target_callsite2), symbol_addr, (uintptr_t)&ksu_do_execve_file);
-		pr_info("hook_site: sys_execveat->__do_execve_file ret: %d \n", ret);
-	}
 	if (!ret)
-		goto unhook_sct_native;
+		restore_syscall((void *)&aarch64_execve, __AARCH64_execve, (void *)hook_aarch64_execve, native_sct);
+
+	ret2 = arm64_b_or_bl_patch(target_callsite2, ksu_get_ksym_size32(target_callsite2), symbol_addr, (uintptr_t)&ksu_do_execve_file);
+	pr_info("hook_site: sys_execveat->__do_execve_file ret: %d \n", ret2);
+	if (!ret2)
+		restore_syscall((void *)&aarch64_execveat, __AARCH64_execveat, (void *)hook_aarch64_execveat, native_sct);
+	goto compat;
 #endif // < 5.9
 hook3:
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
@@ -392,13 +354,11 @@ hook3:
 	ret = arm64_b_or_bl_patch(target_callsite, ksu_get_ksym_size32(target_callsite), symbol_addr, (uintptr_t)&ksu_do_execve_common);
 	pr_info("hook_site: sys_execve->do_execve_common ret: %d \n", ret);
 	if (!ret)
-		goto unhook_sct_native;
+		restore_syscall((void *)&aarch64_execve, __AARCH64_execve, (void *)hook_aarch64_execve, native_sct);
+	goto compat;
 #endif // < 3.19
 
-unhook_sct_native:
-	restore_syscall((void *)&aarch64_execve, __AARCH64_execve, (void *)hook_aarch64_execve, (void *)sys_call_table);
-	restore_syscall((void *)&aarch64_execveat, __AARCH64_execveat, (void *)hook_aarch64_execveat, (void *)sys_call_table);
-
+compat:
 #ifdef CONFIG_COMPAT
 	target_callsite = syscall_lookup("compat_sys_execve");
 	target_callsite2 = syscall_lookup("compat_sys_execveat");
@@ -409,13 +369,15 @@ unhook_sct_native:
 
 	ret = arm64_b_or_bl_patch(target_callsite, ksu_get_ksym_size32(target_callsite), symbol_addr, (uintptr_t)&ksu_do_execveat_common);
 	pr_info("hook_site: compat_sys_execve->do_execveat_common ret: %d \n", ret);
-	if (!ret && !!target_callsite2) {
-		ret = arm64_b_or_bl_patch(target_callsite2, ksu_get_ksym_size32(target_callsite2), symbol_addr, (uintptr_t)&ksu_do_execveat_common);
-		pr_info("hook_site: compat_sys_execveat->do_execveat_common ret: %d \n", ret);
-	}
 	if (!ret)
-		goto unhook_sct_compat;
+		restore_syscall((void *)&armeabi_execve, __ARMEABI_execve, (void *)hook_armeabi_execve, compat_sct);
 
+	ret2 = arm64_b_or_bl_patch(target_callsite2, ksu_get_ksym_size32(target_callsite2), symbol_addr, (uintptr_t)&ksu_do_execveat_common);
+	pr_info("hook_site: compat_sys_execveat->do_execveat_common ret: %d \n", ret2);
+	if (!ret2)
+		restore_syscall((void *)&armeabi_execveat, __ARMEABI_execveat, (void *)hook_armeabi_execveat, compat_sct);
+
+	return ret;
 hook2c:
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
 	symbol_addr = kallsyms_lookup_retry("__do_execve_file");
@@ -424,12 +386,15 @@ hook2c:
 
 	ret = arm64_b_or_bl_patch(target_callsite, ksu_get_ksym_size32(target_callsite), symbol_addr, (uintptr_t)&ksu_do_execve_file);
 	pr_info("hook_site: compat_sys_execve->__do_execve_file ret: %d \n", ret);
-	if (!ret && !!target_callsite2) {
-		ret = arm64_b_or_bl_patch(target_callsite2, ksu_get_ksym_size32(target_callsite2), symbol_addr, (uintptr_t)&ksu_do_execve_file);
-		pr_info("hook_site: compat_sys_execveat->__do_execve_file ret: %d \n", ret);
-	}
 	if (!ret)
-		goto unhook_sct_compat;
+		restore_syscall((void *)&armeabi_execve, __ARMEABI_execve, (void *)hook_armeabi_execve, compat_sct);
+
+	ret2 = arm64_b_or_bl_patch(target_callsite2, ksu_get_ksym_size32(target_callsite2), symbol_addr, (uintptr_t)&ksu_do_execve_file);
+	pr_info("hook_site: compat_sys_execveat->__do_execve_file ret: %d \n", ret2);
+	if (!ret2)
+		restore_syscall((void *)&armeabi_execveat, __ARMEABI_execveat, (void *)hook_armeabi_execveat, compat_sct);
+
+	return ret;
 #endif // < 5.9
 hook3c:
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
@@ -440,13 +405,12 @@ hook3c:
 	ret = arm64_b_or_bl_patch(target_callsite, ksu_get_ksym_size32(target_callsite), symbol_addr, (uintptr_t)&ksu_do_execve_common);
 	pr_info("hook_site: compat_sys_execve->do_execve_common ret: %d \n", ret);
 	if (!ret)
-		goto unhook_sct_compat;
-#endif // < 3.19
+		restore_syscall((void *)&armeabi_execve, __ARMEABI_execve, (void *)hook_armeabi_execve, compat_sct);
 
-unhook_sct_compat:
-	restore_syscall((void *)&armeabi_execve, __ARMEABI_execve, (void *)hook_armeabi_execve, (void *)compat_sys_call_table);
-	restore_syscall((void *)&armeabi_execveat, __ARMEABI_execveat, (void *)hook_armeabi_execveat, (void *)compat_sys_call_table);
+	return ret;
+#endif // < 3.19
 #endif // COMPAT
+
 	return ret;
 }
 #else /* < 3.14 */
@@ -474,7 +438,7 @@ static int bl_hook_execve(void *data)
 	return ret;
 
 unhook_sct_native:
-	restore_syscall((void *)&aarch64_execve, __AARCH64_execve, (void *)hook_aarch64_execve, (void *)sys_call_table);
+	restore_syscall((void *)&aarch64_execve, __AARCH64_execve, (void *)hook_aarch64_execve, native_sct);
 
 #ifdef CONFIG_COMPAT
 	target_callsite = syscall_lookup("compat_sys_execve");
@@ -487,7 +451,7 @@ unhook_sct_native:
 	return ret;
 
 unhook_sct_compat:
-	restore_syscall((void *)&armeabi_execve, __ARMEABI_execve, (void *)hook_armeabi_execve, (void *)compat_sys_call_table);
+	restore_syscall((void *)&armeabi_execve, __ARMEABI_execve, (void *)hook_armeabi_execve, compat_sct);
 #endif
 
 	return ret;
@@ -502,8 +466,14 @@ unhook_sct_compat:
 static int bl_hack_init_thread(void *data)
 {
 	set_user_nice(current, 19); // low prio
-
 	extern char hook_type[];
+
+loop_start:
+	msleep(1000);
+	if (*(volatile bool *)&ksu_vfs_read_hook)
+		goto loop_start;
+
+	msleep(1000);
 
 	bool faccessat = !!!bl_hook_faccessat(data);
 	bool newfstatat = !!!bl_hook_newfstatat(data);
@@ -521,6 +491,7 @@ static int bl_hack_init_thread(void *data)
 static int ksu_branch_link_patch_init()
 {
 	// enable sct first, if branch link succeeds, it will be restored
+	try_mirror_syscall_table();
 	syscall_table_ksud_hook_init();
 	syscall_table_sucompat_enable();
 
